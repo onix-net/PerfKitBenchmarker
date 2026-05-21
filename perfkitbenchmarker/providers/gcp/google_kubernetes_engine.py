@@ -221,6 +221,22 @@ class BaseGkeCluster(kubernetes_cluster.KubernetesCluster):
 
   def _Delete(self):
     """Deletes the cluster."""
+    if hasattr(self, '_nat_router_name'):
+      nat_cmd = self._GcloudCommand(
+          'compute', 'routers', 'nats', 'delete', self._nat_name,
+      )
+      nat_cmd.flags.pop('zone', None)
+      nat_cmd.flags['router'] = self._nat_router_name
+      nat_cmd.flags['region'] = self.region
+      nat_cmd.Issue(raise_on_failure=False)
+
+      router_cmd = self._GcloudCommand(
+          'compute', 'routers', 'delete', self._nat_router_name,
+      )
+      router_cmd.flags.pop('zone', None)
+      router_cmd.flags['region'] = self.region
+      router_cmd.Issue(raise_on_failure=False)
+
     super()._Delete()
     cmd = self._GcloudCommand('container', 'clusters', 'delete', self.name)
     cmd.args.append('--async')
@@ -425,6 +441,43 @@ class GkeCluster(BaseGkeCluster):
 
     if self.enable_aam:
       cmd.args.append('--auto-monitoring-scope=ALL')
+
+    if gcp_flags.GKE_ENABLE_PRIVATE_NODES.value:
+      cmd.args.append('--enable-private-nodes')
+      cmd.args.append('--enable-ip-alias')
+      cmd.args.append('--no-enable-master-authorized-networks')
+      cmd.flags['master-ipv4-cidr'] = gcp_flags.GKE_MASTER_IPV4_CIDR.value
+      # Private nodes have no external IPs; set up Cloud NAT so they can pull
+      # images from external registries (e.g. registry.k8s.io → *.pkg.dev).
+      if self.default_nodepool.network:
+        net_name = self.default_nodepool.network.network_resource.name
+        subnet_cmd = self._GcloudCommand(
+            'compute', 'networks', 'subnets', 'update', net_name,
+        )
+        subnet_cmd.flags.pop('zone', None)
+        subnet_cmd.flags['region'] = self.region
+        subnet_cmd.args.append('--enable-private-ip-google-access')
+        subnet_cmd.Issue()
+
+        self._nat_router_name = f'pkb-router-{self.name}'
+        self._nat_name = f'pkb-nat-{self.name}'
+        router_cmd = self._GcloudCommand(
+            'compute', 'routers', 'create', self._nat_router_name,
+        )
+        router_cmd.flags.pop('zone', None)
+        router_cmd.flags['network'] = net_name
+        router_cmd.flags['region'] = self.region
+        router_cmd.Issue()
+
+        nat_cmd = self._GcloudCommand(
+            'compute', 'routers', 'nats', 'create', self._nat_name,
+        )
+        nat_cmd.flags.pop('zone', None)
+        nat_cmd.flags['router'] = self._nat_router_name
+        nat_cmd.flags['region'] = self.region
+        nat_cmd.args.append('--auto-allocate-nat-external-ips')
+        nat_cmd.args.append('--nat-all-subnet-ip-ranges')
+        nat_cmd.Issue()
 
     self._RunClusterCreateCommand(cmd)
     self._GetKubeconfig()

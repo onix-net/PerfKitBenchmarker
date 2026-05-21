@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: agent-sandbox-load-runner
+  namespace: {{ Namespace }}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: agent-sandbox-load-runner
+    spec:
+      restartPolicy: Never
+      serviceAccountName: load-runner
+      containers:
+        - name: runner
+          image: python:3.12-slim
+          env:
+            - name: LOAD_RUNNER_ARGS
+              value: >-
+                --connection-mode direct
+                --router-url http://sandbox-router-svc.{{ Namespace }}.svc.cluster.local:8080
+                --namespace {{ Namespace }}
+                --template-name {{ TemplateName }}
+                --qps {{ QPS }}
+                --total {{ Total }}
+                --max-concurrent {{ MaxConcurrent }}
+                --workload-duration {{ WorkloadDuration }}
+                --output /tmp/results/run.jsonl
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              mkdir -p /tmp/results
+              pip install --no-cache-dir --quiet k8s-agent-sandbox tqdm \
+                opentelemetry-api opentelemetry-sdk \
+                opentelemetry-exporter-otlp-proto-grpc
+              python /opt/load-runner/load_runner.py ${LOAD_RUNNER_ARGS}
+              echo '---RESULTS---'
+              cat /tmp/results/run.jsonl
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+            - name: script
+              mountPath: /opt/load-runner
+              readOnly: true
+            - name: results
+              mountPath: /tmp/results
+      volumes:
+        - name: script
+          configMap:
+            name: load-runner-script
+        - name: results
+          emptyDir: {}

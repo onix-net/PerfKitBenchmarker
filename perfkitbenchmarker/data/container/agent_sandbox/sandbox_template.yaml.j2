@@ -1,0 +1,35 @@
+apiVersion: extensions.agents.x-k8s.io/v1alpha1
+kind: SandboxTemplate
+metadata:
+  name: {{ TemplateName }}
+  namespace: {{ Namespace }}
+spec:
+  podTemplate:
+    spec:
+      {% if UseGvisor %}
+      runtimeClassName: gvisor
+      nodeSelector:
+        sandbox.benchmark/install-gvisor: "true"
+      tolerations:
+        - key: runtime
+          operator: Equal
+          value: gvisor
+          effect: NoSchedule
+      {% endif %}
+      containers:
+        - name: python-runtime
+          image: registry.k8s.io/agent-sandbox/python-runtime-sandbox:v0.4.5
+          ports:
+            - containerPort: 8888
+          readinessProbe:
+            httpGet:
+              path: "/"
+              port: 8888
+            initialDelaySeconds: 0
+            periodSeconds: 1
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+              ephemeral-storage: "512Mi"
+      restartPolicy: "OnFailure"

@@ -580,6 +580,18 @@ GKE_CLUSTER_IPV4_CIDR_SIZE = flags.DEFINE_integer(
     ' the size derived from max_vm_count. Use when the cluster will scale'
     ' beyond the default node pool (e.g. kubernetes_node_scale with 5k nodes).',
 )
+GKE_ENABLE_PRIVATE_NODES = flags.DEFINE_bool(
+    'gke_enable_private_nodes',
+    False,
+    'If True, create GKE cluster nodes without external IPs (private nodes). '
+    'Required when the project has an org policy blocking vmExternalIpAccess. '
+    'The master control plane endpoint remains public so kubectl still works.',
+)
+GKE_MASTER_IPV4_CIDR = flags.DEFINE_string(
+    'gke_master_ipv4_cidr',
+    '172.16.0.0/28',
+    'IPv4 CIDR range for the master network when --gke_enable_private_nodes is set.',
+)
 GCE_PERFORMANCE_MONITORING_UNIT = flags.DEFINE_enum(
     'gce_performance_monitoring_unit',
     None,

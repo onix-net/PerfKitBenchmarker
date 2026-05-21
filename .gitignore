@@ -12,3 +12,7 @@
 /.idea
 /*git_ignore*
 .DS_Store
+.claude/
+CLAUDE.md
+pkb-reference.md
+agent-sandbox-issue-draft.md
