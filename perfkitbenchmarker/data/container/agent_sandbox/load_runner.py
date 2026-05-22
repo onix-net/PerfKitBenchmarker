@@ -715,7 +715,7 @@ def main():
     args = parser.parse_args()
 
     if args.output is None:
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         args.output = Path(f"./run-step1-{timestamp}.jsonl")
 
     _configure_k8s_pool(max(args.max_concurrent + 50, 250))

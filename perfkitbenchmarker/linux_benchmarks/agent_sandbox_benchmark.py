@@ -19,7 +19,7 @@ Usage:
 import collections
 import json
 import logging
-import textwrap
+import yaml
 
 from absl import flags
 from perfkitbenchmarker import configs
@@ -179,16 +179,17 @@ def Prepare(benchmark_spec):
   with open(load_runner_src) as f:
     script_content = f.read()
 
-  configmap_yaml = '\n'.join([
-      'apiVersion: v1',
-      'kind: ConfigMap',
-      'metadata:',
-      f'  name: {_LOAD_RUNNER_CONFIGMAP}',
-      f'  namespace: {_NAMESPACE}',
-      'data:',
-      '  load_runner.py: |',
-      textwrap.indent(script_content, '    '),
-  ])
+  configmap_yaml = yaml.dump({
+      'apiVersion': 'v1',
+      'kind': 'ConfigMap',
+      'metadata': {
+          'name': _LOAD_RUNNER_CONFIGMAP,
+          'namespace': _NAMESPACE,
+      },
+      'data': {
+          'load_runner.py': script_content,
+      },
+  })
   with vm_util.NamedTemporaryFile(mode='w', suffix='.yaml') as tf:
     tf.write(configmap_yaml)
     tf.close()
