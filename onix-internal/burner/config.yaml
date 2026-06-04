@@ -1,0 +1,36 @@
+# APF stress: one run, one namespace, two jobs.
+#   1) create-churn populates a large pile of configmaps (all stamped apf=stress)
+#   2) list-flood hammers LIST against that pile to pin APF execution seats
+#
+# Single namespace + namespacedIterations:false avoids the "namespace is being
+# terminated" race you hit when recreating per-iteration namespaces over aborted runs.
+# gc:true tears everything down at the end of THIS run, so the next run starts clean
+# and never collides with leftover Terminating namespaces.
+global:
+  gc: true
+  measurements: [] # no podLatency etc.; we only care about API request volume
+
+jobs:
+  # ---- populate: a big pile of configmaps to make each LIST expensive ----
+  - name: create-churn
+    jobType: create
+    qps: 150 # client-side limiter; without this you run at the 5 QPS default
+    burst: 500
+    namespace: apf-stress
+    namespacedIterations: false # everything lands in one namespace
+    jobIterations: 1
+    objects:
+      - objectTemplate: configmap.yaml
+        replicas: 250000 # 250k configmaps; dial down if etcd/quota complains
+
+  # ---- stress: flood LISTs against the pile to hold APF seats ----
+  - name: list-flood
+    jobType: read
+    qps: 100
+    burst: 500
+    jobIterations: 50000
+    objects:
+      - kind: ConfigMap
+        apiVersion: v1
+        labelSelector:
+          apf: stress # matches every configmap the create job stamped
